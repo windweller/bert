@@ -373,6 +373,97 @@ class ColaProcessor(DataProcessor):
           InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
     return examples
 
+EN_FIVE_DISCOURSE_MARKERS = [
+    "and",
+    "because",
+    "but",
+    "if",
+    "when"
+]
+
+EN_EIGHT_DISCOURSE_MARKERS = [
+    "and",
+    "because",
+    "but",
+    "if",
+    "when",
+    "so",
+    "though",
+    "before"
+]
+
+EN_DISCOURSE_MARKERS = [
+    "after",
+    "also",
+    "although",
+    "and",
+    "as",
+    "because",
+    "before",
+    "but",
+    "if",
+    "so",
+    "still",
+    "then",
+    "though",
+    "when",
+    "while"
+]
+
+class DisProcessor(DataProcessor):
+    """A data loader for DIS corpus"""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.dis_corpus = FLAGS.task_name.lower()
+        if self.dis_corpus == 'dis' or self.dis_corpus == 'dis5':
+            self.prefix = "discourse_EN_FIVE_and_but_because_if_when_2017dec12_"
+        elif self.dis_corpus == 'dis8':
+            self.prefix = "discourse_EN_EIGHT_and_but_because_if_when_before_so_though_2017dec18_"
+        elif self.dis_corpus == 'dis_all':
+            self.prefix = "discourse_EN_ALL_and_then_because_though_still_after_when_while_but_also_as_so_although_before_if_2017dec21_"
+
+    def get_labels(self):
+        """See base class."""
+        if self.dis_corpus == 'dis' or self.dis_corpus == 'dis5':
+            return EN_FIVE_DISCOURSE_MARKERS
+        elif self.dis_corpus == 'dis8':
+            return EN_EIGHT_DISCOURSE_MARKERS
+        elif self.dis_corpus == 'dis_all':
+            return EN_DISCOURSE_MARKERS
+
+    def get_train_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, self.prefix + "train.tsv")), "train")
+
+    def get_dev_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, self.prefix + "valid.tsv")), "valid")
+
+    def get_test_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, self.prefix + "test.tsv")), "test")
+
+    def _create_examples(self, lines, set_type):
+        """Creates examples for the training and dev sets."""
+        examples = []
+        for (i, line) in enumerate(lines):
+            if i == 0:
+                continue
+            guid = "%s-%s" % (set_type, tokenization.convert_to_unicode(i))
+            text_a = tokenization.convert_to_unicode(line[0])
+            text_b = tokenization.convert_to_unicode(line[1])
+
+            label = tokenization.convert_to_unicode(line[2])
+
+            examples.append(
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+            
+        return examples
+
 
 def convert_single_example(ex_index, example, label_list, max_seq_length,
                            tokenizer):
@@ -788,6 +879,10 @@ def main(_):
       "mnli": MnliProcessor,
       "mrpc": MrpcProcessor,
       "xnli": XnliProcessor,
+      'dis': DisProcessor,
+      'dis5': DisProcessor,
+      'dis8': DisProcessor,
+      'dis_all': DisProcessor
   }
 
   tokenization.validate_case_matches_checkpoint(FLAGS.do_lower_case,
