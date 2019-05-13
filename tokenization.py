@@ -161,17 +161,24 @@ def whitespace_tokenize(text):
 class FullTokenizer(object):
   """Runs end-to-end tokenziation."""
 
-  def __init__(self, vocab_file, do_lower_case=True):
-    self.vocab = load_vocab(vocab_file)
+  def __init__(self, vocab_file, do_lower_case=True, do_char=False):
+    self.vocab = load_vocab(vocab_file)  # we also created a char version of the vocab file
     self.inv_vocab = {v: k for k, v in self.vocab.items()}
     self.basic_tokenizer = BasicTokenizer(do_lower_case=do_lower_case)
     self.wordpiece_tokenizer = WordpieceTokenizer(vocab=self.vocab)
 
+    self.do_char = do_char
+
   def tokenize(self, text):
-    split_tokens = []
+    split_tokens = [] # final result
     for token in self.basic_tokenizer.tokenize(text):
-      for sub_token in self.wordpiece_tokenizer.tokenize(token):
-        split_tokens.append(sub_token)
+      if self.do_char:
+        for char in token:
+          split_tokens.append(char)
+        split_tokens.append("_")  # this adds "h a p p y _"
+      else:
+        for sub_token in self.wordpiece_tokenizer.tokenize(token):
+          split_tokens.append(sub_token)
 
     return split_tokens
 
@@ -185,18 +192,26 @@ class FullTokenizer(object):
 class BasicTokenizer(object):
   """Runs basic tokenization (punctuation splitting, lower casing, etc.)."""
 
-  def __init__(self, do_lower_case=True):
+  def __init__(self, do_lower_case=True, do_char=False):
     """Constructs a BasicTokenizer.
 
     Args:
       do_lower_case: Whether to lower case the input.
     """
     self.do_lower_case = do_lower_case
+    self.do_char = do_char
+
+    self.handle_match = re.compile(
+      r"(?<![A-Za-z0-9_!@#\$%&*])@(([A-Za-z0-9_]){20}(?!@))|(?<![A-Za-z0-9_!@#\$%&*])@(([A-Za-z0-9_]){1,19})(?![A-Za-z0-9_]*@)")  # from NLTK
+    self.url_match = re.compile("http[\w\d:/.]+")
 
   def tokenize(self, text):
     """Tokenizes a piece of text."""
     text = convert_to_unicode(text)
     text = self._clean_text(text)
+
+    if self.do_char:
+      text = self._clean_tweet(text)
 
     # This was added on November 1st, 2018 for the multilingual and Chinese
     # models. This is also applied to the English models now, but it doesn't
@@ -295,6 +310,11 @@ class BasicTokenizer(object):
       else:
         output.append(char)
     return "".join(output)
+
+  def _clean_tweet(self, text):
+    text = self.handle_match.sub("@USER", text)
+    text = self.url_match.sub("URL", text)
+    return text
 
 
 class WordpieceTokenizer(object):
