@@ -1,0 +1,54 @@
+DIS 5 1 epoch Training
+(for 1 epoch)
+INFO:tensorflow:Saving dict for global step 90465: eval_accuracy = 0.86089313, eval_loss = 0.37436765, global_step = 90465, loss = 0.37435395
+INFO:tensorflow:Saving 'checkpoint_path' summary for global step 90465: /home/anie/bert_models/fine_tuned_dis5_epoch1/model.ckpt-90465
+INFO:tensorflow:evaluation_loop marked as finished
+INFO:tensorflow:***** Eval results *****
+INFO:tensorflow:  eval_accuracy = 0.86089313
+INFO:tensorflow:  eval_loss = 0.37436765
+INFO:tensorflow:  global_step = 90465
+INFO:tensorflow:  loss = 0.37435395
+
+SMNLI 3 epochs Training
+
+INFO:tensorflow:Saving dict for global step 88318: eval_accuracy = 0.8229241, eval_loss = 0.6123202, global_step = 88318, loss = 0.6123409
+INFO:tensorflow:Saving 'checkpoint_path' summary for global step 88318: /home/anie/bert_models/fine_tuned_smnli/model.ckpt-88318
+INFO:tensorflow:evaluation_loop marked as finished
+INFO:tensorflow:***** Eval results *****
+INFO:tensorflow:  eval_accuracy = 0.8229241
+INFO:tensorflow:  eval_loss = 0.6123202
+INFO:tensorflow:  global_step = 88318
+INFO:tensorflow:  loss = 0.6123409
+
+SMNLI 2 epochs Training
+
+INFO:tensorflow:Saving dict for global step 58879: eval_accuracy = 0.8223128, eval_loss = 0.59457535, global_step = 58879, loss = 0.59459144
+INFO:tensorflow:Saving 'checkpoint_path' summary for global step 58879: /home/anie/bert_models/fine_tuned_smnli_epoch2/model.ckpt-58879
+INFO:tensorflow:evaluation_loop marked as finished
+INFO:tensorflow:***** Eval results *****
+INFO:tensorflow:  eval_accuracy = 0.8223128
+INFO:tensorflow:  eval_loss = 0.59457535
+INFO:tensorflow:  global_step = 58879
+INFO:tensorflow:  loss = 0.59459144
+
+DIS 8 1 epoch Training
+
+INFO:tensorflow:Saving dict for global step 101700: eval_accuracy = 0.8276594, eval_loss = 0.48411778, global_step = 101700, loss = 0.48411712
+INFO:tensorflow:Saving 'checkpoint_path' summary for global step 101700: /home/anie/bert_models/fine_tuned_dis8_epoch1/model.ckpt-101700
+INFO:tensorflow:evaluation_loop marked as finished
+INFO:tensorflow:***** Eval results *****
+INFO:tensorflow:  eval_accuracy = 0.8276594
+INFO:tensorflow:  eval_loss = 0.48411778
+INFO:tensorflow:  global_step = 101700
+INFO:tensorflow:  loss = 0.48411712
+
+DIS ALL 1 epoch Training
+
+INFO:tensorflow:Saving dict for global step 132364: eval_accuracy = 0.77398616, eval_loss = 0.6702858, global_step = 132364, loss = 0.67027676
+INFO:tensorflow:Saving 'checkpoint_path' summary for global step 132364: /home/anie/bert_models/fine_tuned_dis_all_epoch1/model.ckpt-132364
+INFO:tensorflow:evaluation_loop marked as finished
+INFO:tensorflow:***** Eval results *****
+INFO:tensorflow:  eval_accuracy = 0.77398616
+INFO:tensorflow:  eval_loss = 0.6702858
+INFO:tensorflow:  global_step = 132364
+INFO:tensorflow:  loss = 0.67027676
