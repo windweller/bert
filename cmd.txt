@@ -1,0 +1,44 @@
+sh train_dis5.sh | tee uncased_base_dis_5_log.txt  (node14-pa)
+sh train_dis8.sh | tee uncased_base_dis_8_log.txt  (node14-train)
+sh train_dis_all.sh | tee uncased_base_dis_all_log.txt  (node14-dodo)
+sh train_mnli.sh (node14-lm)
+
+sh predict_dis5.sh
+sh predict_dis8.sh
+sh predict_dis_all.sh
+
+note: about 93750 steps would be 1 epoch
+We train for 5 epochs.
+
+125 iterations per minute
+
+750 minutes per epoch -- 12.5 hours per epoch
+5 epochs ~= 2.5 days
+
+4.2M for Dis ALL
+132364 steps per epoch
+
+Currently it seems like 2.5 epochs (3 epochs) would be quite enough. Possibly even 2 epochs would be enough.
+
+For PDTB IM
+
+sh pdtb_scripts/finetune_dis5.sh -t pdtb_im
+sh pdtb_scripts/finetune_dis8.sh -t pdtb_im
+sh pdtb_scripts/finetune_dis_all.sh -t pdtb_im
+
+sh pdtb_scripts/finetune_bert.sh -t pdtb_im
+sh pdtb_scripts/finetune_mnli.sh -t pdtb_im
+
+For PDTB IMEX
+
+sh pdtb_scripts/finetune_dis5.sh -t pdtb_imex
+sh pdtb_scripts/finetune_dis8.sh -t pdtb_imex
+sh pdtb_scripts/finetune_dis_all.sh -t pdtb_imex
+
+sh pdtb_scripts/finetune_bert.sh -t pdtb_imex
+sh pdtb_scripts/finetune_mnli.sh -t pdtb_imex
+
+Generate Twitter training files
+Training files can be grabbed by: /mnt/fs5/anie/twitter_quote_reply_2019_apr2/*tweets.txt
+
+Generate TFExample Record files

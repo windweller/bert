@@ -328,12 +328,18 @@ def get_assignment_map_from_checkpoint(tvars, init_checkpoint):
     name_to_variable[name] = var
 
   init_vars = tf.train.list_variables(init_checkpoint)
+  # NEW: here we modify the init_vars so that "output_weights"
+  # and "output_bias" are not loaded in by mistake
 
   assignment_map = collections.OrderedDict()
   for x in init_vars:
     (name, var) = (x[0], x[1])
     if name not in name_to_variable:
       continue
+    # also we need to mask out all the output thingy
+    if "output_" in name:
+        continue
+
     assignment_map[name] = name
     initialized_variable_names[name] = 1
     initialized_variable_names[name + ":0"] = 1

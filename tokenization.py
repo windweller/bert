@@ -23,6 +23,7 @@ import re
 import unicodedata
 import six
 import tensorflow as tf
+import emoji
 
 
 def validate_case_matches_checkpoint(do_lower_case, init_checkpoint):
@@ -157,6 +158,225 @@ def whitespace_tokenize(text):
   tokens = text.split()
   return tokens
 
+
+"""
+We modify this to do:
+1. Do not split @USER 
+2. Do not split Hashtag #Crazy
+"""
+class TwitterBasicTokenizer(object):
+  """Runs basic tokenization (punctuation splitting, lower casing, etc.)."""
+
+  def __init__(self, vocab_file, vocab=None, do_lower_case=True):
+    """Constructs a BasicTokenizer.
+    Args:
+      do_lower_case: Whether to lower case the input.
+      vocab_file: we can just append and augment BERT's vocab.
+    """
+    self.do_lower_case = do_lower_case
+    self.handle_match = re.compile(
+        r"(?<![A-Za-z0-9_!@#\$%&*])@(([A-Za-z0-9_]){20}(?!@))|(?<![A-Za-z0-9_!@#\$%&*])@(([A-Za-z0-9_]){1,19})(?![A-Za-z0-9_]*@)")  # from NLTK
+    self.url_match = re.compile("http[\w\d:/.]+")
+
+    # [UNK]
+    # [CLS]
+    # [SEP]
+    # [MASK]
+    # [URL]
+    # @USER
+
+    self.special_toks = {'[UNK]', '[CLS]', '[SEP]', '[MASK]', 'URL', '@USER'}
+    self.no_rep_special_toks = {'[CLS]', '[SEP]', '[MASK]'}
+
+    if vocab_file is not None:
+      self.vocab = load_vocab(vocab_file)
+      self.ids_to_tokens = collections.OrderedDict(
+      [(ids, tok) for tok, ids in self.vocab.items()])
+    elif vocab is not None:
+      self.vocab = vocab
+      self.ids_to_tokens = collections.OrderedDict(
+        [(ids, tok) for tok, ids in self.vocab.items()])
+    else:
+      self.vocab = None
+      self.ids_to_tokens = None
+
+  def get_vocab_list(self):
+    # we need to make sure vocab does not contain speicial tokens
+    vocab_list = list(self.vocab.keys())
+    for k in self.no_rep_special_toks:
+      vocab_list.remove(k)
+
+    return vocab_list
+
+  def convert_tokens_to_ids(self, tokens):
+    """Converts a sequence of tokens into ids using the vocab."""
+    ids = []
+    for token in tokens:
+      ids.append(self.vocab.get(token, self.vocab['[UNK]']))
+      # ids.append(self.vocab[token])
+    return ids
+
+  def convert_ids_to_tokens(self, ids):
+    """Converts a sequence of ids in wordpiece tokens using the vocab."""
+    tokens = []
+    for i in ids:
+      tokens.append(self.ids_to_tokens[i])
+    return tokens
+
+  def to_char(self, tokens):
+    """
+    The special part of this is that we are NOT breaking up special tokens
+
+    :param tokens: take `output_tokens` from tokenize()
+    :return:
+    """
+    char_output = []
+    for token in tokens:
+      if token not in self.special_toks:
+        char_output.extend([t for t in token] + ['[WB]'])  # word boundary
+      else:
+        char_output.append(token)
+        char_output.append('[WB]')
+
+    output_tokens = char_output[:-1]
+
+    return output_tokens
+
+  def normalize_tweet(self, text, do_bpe=False):
+    text = convert_to_unicode(text)
+
+    # strip handle
+    # strip URL
+    text = self.handle_match.sub("@USER", text)
+    text = self.url_match.sub("URL", text)
+
+    # when we do bpe, we take out emoji because it just maps to <UNK>
+    if do_bpe:
+      text = ''.join(c for c in text if c not in emoji.UNICODE_EMOJI)
+
+    return text
+
+  def tokenize(self, text, to_char=False):
+    """Tokenizes a piece of text. Return a list"""
+    text = convert_to_unicode(text)
+
+    # strip handle
+    # strip URL
+    text = self.handle_match.sub("@USER", text)
+    text = self.url_match.sub("URL", text)
+
+    text = self._clean_text(text)
+
+    # This was added on November 1st, 2018 for the multilingual and Chinese
+    # models. This is also applied to the English models now, but it doesn't
+    # matter since the English models were not trained on any Chinese data
+    # and generally don't have any Chinese data in them (there are Chinese
+    # characters in the vocabulary because Wikipedia does have some Chinese
+    # words in the English Wikipedia.).
+    text = self._tokenize_chinese_chars(text)
+
+    orig_tokens = whitespace_tokenize(text)
+    split_tokens = []
+    for token in orig_tokens:
+      if self.do_lower_case:
+        token = token.lower()
+        token = self._run_strip_accents(token)
+      split_tokens.extend(self._run_split_on_punc(token))
+
+    output_tokens = whitespace_tokenize(" ".join(split_tokens))
+
+    # if self.do_bpe:
+    #   split_tokens = []
+    #   for token in output_tokens:
+    #     for sub_token in self.wordpiece_tokenizer.tokenize(token):
+    #       split_tokens.append(sub_token)
+    #
+    #   return split_tokens
+
+    if to_char:
+      output_tokens = self.to_char(output_tokens)
+
+    return output_tokens
+
+  def _run_strip_accents(self, text):
+    """Strips accents from a piece of text."""
+    text = unicodedata.normalize("NFD", text)
+    output = []
+    for char in text:
+      cat = unicodedata.category(char)
+      if cat == "Mn":
+        continue
+      output.append(char)
+    return "".join(output)
+
+  def _run_split_on_punc(self, text):
+    """Splits punctuation on a piece of text."""
+    chars = list(text)
+    i = 0
+    start_new_word = True
+    output = []
+    while i < len(chars):
+      char = chars[i]
+      # avoid [URL]...but  this might be too restrictive?? Ehhh
+      if _is_punctuation(char) and char != '@' and char != '#':  # avoid handle and hashtag
+        output.append([char])
+        start_new_word = True
+      else:
+        if start_new_word:
+          output.append([])
+        start_new_word = False
+        output[-1].append(char)
+      i += 1
+
+    return ["".join(x) for x in output]
+
+  def _tokenize_chinese_chars(self, text):
+    """Adds whitespace around any CJK character."""
+    output = []
+    for char in text:
+      cp = ord(char)
+      if self._is_chinese_char(cp):
+        output.append(" ")
+        output.append(char)
+        output.append(" ")
+      else:
+        output.append(char)
+    return "".join(output)
+
+  def _is_chinese_char(self, cp):
+      """Checks whether CP is the codepoint of a CJK character."""
+      # This defines a "chinese character" as anything in the CJK Unicode block:
+      #   https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)
+      #
+      # Note that the CJK Unicode block is NOT all Japanese and Korean characters,
+      # despite its name. The modern Korean Hangul alphabet is a different block,
+      # as is Japanese Hiragana and Katakana. Those alphabets are used to write
+      # space-separated words, so they are not treated specially and handled
+      # like the all of the other languages.
+      if ((cp >= 0x4E00 and cp <= 0x9FFF) or  #
+              (cp >= 0x3400 and cp <= 0x4DBF) or  #
+              (cp >= 0x20000 and cp <= 0x2A6DF) or  #
+              (cp >= 0x2A700 and cp <= 0x2B73F) or  #
+              (cp >= 0x2B740 and cp <= 0x2B81F) or  #
+              (cp >= 0x2B820 and cp <= 0x2CEAF) or
+              (cp >= 0xF900 and cp <= 0xFAFF) or  #
+              (cp >= 0x2F800 and cp <= 0x2FA1F)):  #
+          return True
+
+      return False
+
+  def _clean_text(self, text):
+    """Performs invalid character removal and whitespace cleanup on text."""
+    output = []
+    for char in text:
+      cp = ord(char)
+      if cp == 0 or cp == 0xfffd or _is_control(char):
+        continue
+      if _is_whitespace(char):
+        output.append(" ")
+      else:
+        output.append(char)
+    return "".join(output)
 
 class FullTokenizer(object):
   """Runs end-to-end tokenziation."""

@@ -57,17 +57,19 @@ flags.DEFINE_integer(
     "Maximum number of masked LM predictions per sequence. "
     "Must match data generation.")
 
+flags.DEFINE_bool("char", False, "Run char-level training; will disable next sentence prediction")
+
 flags.DEFINE_bool("do_train", False, "Whether to run training.")
 
 flags.DEFINE_bool("do_eval", False, "Whether to run eval on the dev set.")
 
-flags.DEFINE_integer("train_batch_size", 32, "Total batch size for training.")
+flags.DEFINE_integer("train_batch_size", 400, "Total batch size for training.")  # 256 seq * 512 tokens = 128000 tokens/batch
 
 flags.DEFINE_integer("eval_batch_size", 8, "Total batch size for eval.")
 
-flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
+flags.DEFINE_float("learning_rate", 1e-4, "The initial learning rate for Adam.")  # 5e-5
 
-flags.DEFINE_integer("num_train_steps", 100000, "Number of training steps.")
+flags.DEFINE_integer("num_train_steps", 5000000, "Number of training steps.")  # 50M / 400 per batch = 125000, 40 epochs, 125000 * 40
 
 flags.DEFINE_integer("num_warmup_steps", 10000, "Number of warmup steps.")
 
@@ -177,10 +179,15 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
       train_op = optimization.create_optimizer(
           total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu)
 
+      # https://github.com/google-research/bert/issues/70
+      logging_hook = tf.train.LoggingTensorHook({"masked_lm_loss": masked_lm_loss,
+                                                 "next_sentence_loss": next_sentence_loss}, every_n_iter=10000)
+
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
           loss=total_loss,
           train_op=train_op,
+          training_hooks=[logging_hook],
           scaffold_fn=scaffold_fn)
     elif mode == tf.estimator.ModeKeys.EVAL:
 
@@ -353,7 +360,7 @@ def input_fn_builder(input_files,
     # For eval, we want no shuffling and parallel reading doesn't matter.
     if is_training:
       d = tf.data.Dataset.from_tensor_slices(tf.constant(input_files))
-      d = d.repeat()
+      d = d.repeat()  # this in principle just stops randomness in dataset
       d = d.shuffle(buffer_size=len(input_files))
 
       # `cycle_length` is the number of parallel files that get read.

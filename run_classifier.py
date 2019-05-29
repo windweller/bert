@@ -91,7 +91,7 @@ flags.DEFINE_float(
     "Proportion of training to perform linear learning rate warmup for. "
     "E.g., 0.1 = 10% of training.")
 
-flags.DEFINE_integer("save_checkpoints_steps", 1000,
+flags.DEFINE_integer("save_checkpoints_steps", 5000,
                      "How often to save the model checkpoint.")
 
 flags.DEFINE_integer("iterations_per_loop", 1000,
@@ -123,6 +123,7 @@ flags.DEFINE_integer(
     "num_tpu_cores", 8,
     "Only used if `use_tpu` is True. Total number of TPU cores to use.")
 
+tf.flags.DEFINE_bool("log_file", False, "Save logs to a file in the model save directory")
 
 class InputExample(object):
   """A single training/test example for simple sequence classification."""
@@ -373,6 +374,66 @@ class ColaProcessor(DataProcessor):
           InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
     return examples
 
+class PDTBProcessor(DataProcessor):
+    """Load in our processed PDTB dataset"""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.pdtb_task = FLAGS.task_name.lower()
+        if self.pdtb_task == 'pdtb_im':
+            self.taks_name = "pdtb_im_"
+        elif self.pdtb_task == 'pdtb_imex':
+            self.taks_name = "pdtb_imex_"
+
+    def get_labels(self):
+        """See base class."""
+        if self.pdtb_task == 'pdtb_im':
+            return ['Instantiation',
+                      'Synchrony',
+                      'Pragmatic cause',
+                      'List',
+                      'Asynchronous',
+                      'Restatement',
+                      'Alternative',
+                      'Conjunction',
+                      'Cause',
+                      'Concession',
+                      'Contrast']
+        elif self.pdtb_task == 'pdtb_imex':
+            return ['Explicit', 'Implicit']
+
+    def get_train_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, self.taks_name + "train.tsv")), "train")
+
+    def get_dev_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, self.taks_name + "dev.tsv")), "valid")
+
+    def get_test_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, self.taks_name + "test.tsv")), "test")
+
+    def _create_examples(self, lines, set_type):
+        """Creates examples for the training and dev sets."""
+        examples = []
+        for (i, line) in enumerate(lines):
+            if i == 0:
+                continue
+            guid = "%s-%s" % (set_type, i)
+            text_a = tokenization.convert_to_unicode(line[0])
+            text_b = tokenization.convert_to_unicode(line[1])
+
+            label = tokenization.convert_to_unicode(line[2])
+
+            examples.append(
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+
+        return examples
+
 EN_FIVE_DISCOURSE_MARKERS = [
     "and",
     "because",
@@ -453,7 +514,7 @@ class DisProcessor(DataProcessor):
         for (i, line) in enumerate(lines):
             if i == 0:
                 continue
-            guid = "%s-%s" % (set_type, tokenization.convert_to_unicode(i))
+            guid = "%s-%s" % (set_type, i)
             text_a = tokenization.convert_to_unicode(line[0])
             text_b = tokenization.convert_to_unicode(line[1])
 
@@ -461,7 +522,7 @@ class DisProcessor(DataProcessor):
 
             examples.append(
                 InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-            
+
         return examples
 
 
@@ -759,6 +820,8 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
       tf.logging.info("  name = %s, shape = %s%s", var.name, var.shape,
                       init_string)
 
+    logging_hook = tf.train.LoggingTensorHook({"loss": total_loss},
+                                              every_n_iter=FLAGS.iterations_per_loop)
     output_spec = None
     if mode == tf.estimator.ModeKeys.TRAIN:
 
@@ -768,6 +831,7 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
           loss=total_loss,
+          training_hooks=[logging_hook],  # works for tf=1.11
           train_op=train_op,
           scaffold_fn=scaffold_fn)
     elif mode == tf.estimator.ModeKeys.EVAL:
@@ -790,6 +854,7 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
           eval_metrics=eval_metrics,
           scaffold_fn=scaffold_fn)
     else:
+      # predictions
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
           predictions={"probabilities": probabilities},
@@ -871,7 +936,10 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
   return features
 
 
+import logging
+
 def main(_):
+
   tf.logging.set_verbosity(tf.logging.INFO)
 
   processors = {
@@ -882,7 +950,9 @@ def main(_):
       'dis': DisProcessor,
       'dis5': DisProcessor,
       'dis8': DisProcessor,
-      'dis_all': DisProcessor
+      'dis_all': DisProcessor,
+      'pdtb_im': PDTBProcessor,
+      'pdtb_imex': PDTBProcessor
   }
 
   tokenization.validate_case_matches_checkpoint(FLAGS.do_lower_case,
@@ -901,6 +971,13 @@ def main(_):
         (FLAGS.max_seq_length, bert_config.max_position_embeddings))
 
   tf.gfile.MakeDirs(FLAGS.output_dir)
+
+  if FLAGS.log_file:
+    logger = logging.getLogger('tensorflow')
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    fh = logging.FileHandler(os.path.join(FLAGS.output_dir, 'tensorflow.log'))
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
 
   task_name = FLAGS.task_name.lower()
 
