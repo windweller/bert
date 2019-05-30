@@ -64,15 +64,15 @@ flags.DEFINE_bool("do_train", False, "Whether to run training.")
 
 flags.DEFINE_bool("do_eval", False, "Whether to run eval on the dev set.")
 
-flags.DEFINE_integer("train_batch_size", 400, "Total batch size for training.")  # 256 seq * 512 tokens = 128000 tokens/batch
+flags.DEFINE_integer("train_batch_size", 512, "Total batch size for training.")  # 256 seq * 512 tokens = 128000 tokens/batch
 
 flags.DEFINE_integer("eval_batch_size", 8, "Total batch size for eval.")
 
 flags.DEFINE_float("learning_rate", 1e-4, "The initial learning rate for Adam.")  # 5e-5
 
-flags.DEFINE_integer("num_train_steps", 5000000, "Number of training steps.")  # 50M / 400 per batch = 125000, 40 epochs, 125000 * 40
+flags.DEFINE_integer("num_train_steps", 3906240, "Number of training steps.")  # 50M / 512 per batch = , 40 epochs, 125000 * 40
 
-flags.DEFINE_integer("num_warmup_steps", 10000, "Number of warmup steps.")
+flags.DEFINE_integer("num_warmup_steps", 39062, "Number of warmup steps.")  # 1% steps would be used for warmup
 
 flags.DEFINE_integer("save_checkpoints_steps", 1000,
                      "How often to save the model checkpoint.")
@@ -215,7 +215,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
           # number of iterations will make the summary writer only flush the data
           # to storage once per loop.
           with summary.create_file_writer(
-                  FLAGS.model_dir,
+                  FLAGS.output_dir,
                   max_queue=params['iterations_per_loop']).as_default():
               with summary.always_record_summaries():
                   summary.scalar('mlm_loss', mlm_loss[0], step=gs)
