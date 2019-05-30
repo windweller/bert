@@ -177,8 +177,8 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
 
     output_spec = None
     if mode == tf.estimator.ModeKeys.TRAIN:
-      train_op = optimization.create_optimizer(
-          total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu)
+      train_op, true_lr = optimization.create_optimizer(
+          total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu, return_lr=True)
 
       # https://github.com/google-research/bert/issues/70
       # logging_hook = tf.train.LoggingTensorHook({"masked_lm_loss": masked_lm_loss,
@@ -188,11 +188,11 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
       # Tensorboard hook
 
       global_step = tf.train.get_global_step()
-      # steps_per_epoch = params['num_train_images'] / params['train_batch_size']
-      # current_epoch = (tf.cast(global_step, tf.float32) /
-      #                  steps_per_epoch)
+      steps_per_epoch = 50000000 / FLAGS.train_batch_size
+      current_epoch = (tf.cast(global_step, tf.float32) /
+                       steps_per_epoch)
 
-      def host_call_fn(gs, mlm_loss, nsp_loss, lr):
+      def host_call_fn(gs, mlm_loss, nsp_loss, ce, lr):
           """Training host call. Creates scalar summaries for training metrics.
           This function is executed on the CPU and should not directly reference
           any Tensors in the rest of the `model_fn`. To pass Tensors from the
@@ -222,7 +222,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
                   summary.scalar('mlm_loss', mlm_loss[0], step=gs)
                   summary.scalar('nsp_loss', nsp_loss[0], step=gs)
                   summary.scalar('learning_rate', lr[0], step=gs)
-                  # summary.scalar('current_epoch', ce[0], step=gs)
+                  summary.scalar('current_epoch', ce[0], step=gs)
 
                   return summary.all_summary_ops()
 
@@ -234,9 +234,10 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
       gs_t = tf.reshape(global_step, [1])
       masked_lm_loss_t = tf.reshape(masked_lm_loss, [1])
       next_sentence_loss_t = tf.reshape(next_sentence_loss, [1])
-      lr_t = tf.reshape(learning_rate, [1])
+      lr_t = tf.reshape(true_lr, [1])
+      ce_t = tf.reshape(current_epoch, [1])
 
-      host_call = (host_call_fn, [gs_t, masked_lm_loss_t, next_sentence_loss_t, lr_t])  # , ce_t
+      host_call = (host_call_fn, [gs_t, masked_lm_loss_t, next_sentence_loss_t, ce_t, lr_t])  # , ce_t
 
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
