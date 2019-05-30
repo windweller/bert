@@ -22,6 +22,7 @@ import os
 import modeling
 import optimization
 import tensorflow as tf
+from tensorflow.contrib import summary
 
 flags = tf.flags
 
@@ -183,12 +184,67 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
       logging_hook = tf.train.LoggingTensorHook({"masked_lm_loss": masked_lm_loss,
                                                  "next_sentence_loss": next_sentence_loss}, every_n_iter=10000)
 
+      # https://github.com/tensorflow/tpu/blob/master/models/official/resnet/resnet_main.py
+      # Tensorboard hook
+
+      global_step = tf.train.get_global_step()
+      # steps_per_epoch = params['num_train_images'] / params['train_batch_size']
+      # current_epoch = (tf.cast(global_step, tf.float32) /
+      #                  steps_per_epoch)
+
+      def host_call_fn(gs, mlm_loss, nsp_loss, lr):
+          """Training host call. Creates scalar summaries for training metrics.
+          This function is executed on the CPU and should not directly reference
+          any Tensors in the rest of the `model_fn`. To pass Tensors from the
+          model to the `metric_fn`, provide as part of the `host_call`. See
+          https://www.tensorflow.org/api_docs/python/tf/contrib/tpu/TPUEstimatorSpec
+          for more information.
+          Arguments should match the list of `Tensor` objects passed as the second
+          element in the tuple passed to `host_call`.
+          Args:
+            gs: `Tensor with shape `[batch]` for the global_step
+            loss: `Tensor` with shape `[batch]` for the training loss.
+            lr: `Tensor` with shape `[batch]` for the learning_rate.
+            ce: `Tensor` with shape `[batch]` for the current_epoch.
+          Returns:
+            List of summary ops to run on the CPU host.
+          """
+          gs = gs[0]
+          # Host call fns are executed params['iterations_per_loop'] times after
+          # one TPU loop is finished, setting max_queue value to the same as
+          # number of iterations will make the summary writer only flush the data
+          # to storage once per loop.
+          with summary.create_file_writer(
+                  FLAGS.model_dir,
+                  max_queue=params['iterations_per_loop']).as_default():
+              with summary.always_record_summaries():
+                  summary.scalar('mlm_loss', mlm_loss[0], step=gs)
+                  summary.scalar('nsp_loss', nsp_loss[0], step=gs)
+                  summary.scalar('learning_rate', lr[0], step=gs)
+                  # summary.scalar('current_epoch', ce[0], step=gs)
+
+                  return summary.all_summary_ops()
+
+      # To log the loss, current learning rate, and epoch for Tensorboard, the
+      # summary op needs to be run on the host CPU via host_call. host_call
+      # expects [batch_size, ...] Tensors, thus reshape to introduce a batch
+      # dimension. These Tensors are implicitly concatenated to
+      # [params['batch_size']].
+      gs_t = tf.reshape(global_step, [1])
+      masked_lm_loss_t = tf.reshape(masked_lm_loss, [1])
+      next_sentence_loss_t = tf.reshape(next_sentence_loss, [1])
+      lr_t = tf.reshape(learning_rate, [1])
+
+      host_call = (host_call_fn, [gs_t, masked_lm_loss_t, next_sentence_loss_t, lr_t])  # , ce_t
+
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
           loss=total_loss,
           train_op=train_op,
           training_hooks=[logging_hook],
+          host_call=host_call,
           scaffold_fn=scaffold_fn)
+
     elif mode == tf.estimator.ModeKeys.EVAL:
 
       def metric_fn(masked_lm_example_loss, masked_lm_log_probs, masked_lm_ids,
@@ -452,6 +508,9 @@ def main(_):
       num_warmup_steps=FLAGS.num_warmup_steps,
       use_tpu=FLAGS.use_tpu,
       use_one_hot_embeddings=FLAGS.use_tpu)
+
+  # https://github.com/tensorflow/tpu/blob/master/models/official/resnet/resnet_main.py
+  # we need to add Tensorboard stugff
 
   # If TPU is not available, this will fall back to normal Estimator on CPU
   # or GPU.
