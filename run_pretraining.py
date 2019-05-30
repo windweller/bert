@@ -181,8 +181,8 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
           total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu)
 
       # https://github.com/google-research/bert/issues/70
-      logging_hook = tf.train.LoggingTensorHook({"masked_lm_loss": masked_lm_loss,
-                                                 "next_sentence_loss": next_sentence_loss}, every_n_iter=10000)
+      # logging_hook = tf.train.LoggingTensorHook({"masked_lm_loss": masked_lm_loss,
+      #                                            "next_sentence_loss": next_sentence_loss}, every_n_iter=10000)
 
       # https://github.com/tensorflow/tpu/blob/master/models/official/resnet/resnet_main.py
       # Tensorboard hook
@@ -242,7 +242,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
           mode=mode,
           loss=total_loss,
           train_op=train_op,
-          training_hooks=[logging_hook],
+          # training_hooks=[logging_hook],
           host_call=host_call,
           scaffold_fn=scaffold_fn)
 
