@@ -216,7 +216,8 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
           # to storage once per loop.
           with summary.create_file_writer(
                   FLAGS.output_dir,
-                  max_queue=params['iterations_per_loop']).as_default():
+                  # max_queue=params['iterations_per_loop']).as_default():
+                  max_queue=FLAGS.iterations_per_loop).as_default():
               with summary.always_record_summaries():
                   summary.scalar('mlm_loss', mlm_loss[0], step=gs)
                   summary.scalar('nsp_loss', nsp_loss[0], step=gs)
