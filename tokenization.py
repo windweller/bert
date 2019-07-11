@@ -167,7 +167,7 @@ We modify this to do:
 class TwitterBasicTokenizer(object):
   """Runs basic tokenization (punctuation splitting, lower casing, etc.)."""
 
-  def __init__(self, vocab_file, vocab=None, do_lower_case=True):
+  def __init__(self, vocab_file, vocab=None, do_lower_case=True, default_char=True):
     """Constructs a BasicTokenizer.
     Args:
       do_lower_case: Whether to lower case the input.
@@ -177,6 +177,11 @@ class TwitterBasicTokenizer(object):
     self.handle_match = re.compile(
         r"(?<![A-Za-z0-9_!@#\$%&*])@(([A-Za-z0-9_]){20}(?!@))|(?<![A-Za-z0-9_!@#\$%&*])@(([A-Za-z0-9_]){1,19})(?![A-Za-z0-9_]*@)")  # from NLTK
     self.url_match = re.compile("http[\w\d:/.]+")
+    self.default_char = default_char
+
+    # a better matching pattern for URL is: "http[\w\d:/.?\-\=\&]+"
+    # to match this type of string:
+    # https://curation.clinicalgenome.org/variant-central/?edit=true&variant=c8e35e38-6a62-4455-a7a7-72756304b522&interpretation=30fad21c-ae87-4f4d-b0af-6d258bb9c313&tab=experimental
 
     # [UNK]
     # [CLS]
@@ -250,6 +255,10 @@ class TwitterBasicTokenizer(object):
     text = self.handle_match.sub("@USER", text)
     text = self.url_match.sub("URL", text)
 
+    text = text.replace('\n', '')  # tweets can have \n
+    text = text.replace('\t', '')
+    text = re.sub(' +', ' ', text)
+
     # when we do bpe, we take out emoji because it just maps to <UNK>
     if do_bpe:
       text = ''.join(c for c in text if c not in emoji.UNICODE_EMOJI)
@@ -258,6 +267,10 @@ class TwitterBasicTokenizer(object):
 
   def tokenize(self, text, to_char=False):
     """Tokenizes a piece of text. Return a list"""
+
+    if self.default_char:
+      to_char = True
+
     text = convert_to_unicode(text)
 
     # strip handle
@@ -266,6 +279,10 @@ class TwitterBasicTokenizer(object):
     text = self.url_match.sub("URL", text)
 
     text = self._clean_text(text)
+
+    text = text.replace('\n', '')  # tweets can have \n
+    text = text.replace('\t', '')
+    text = re.sub(' +', ' ', text)
 
     # This was added on November 1st, 2018 for the multilingual and Chinese
     # models. This is also applied to the English models now, but it doesn't
@@ -284,14 +301,6 @@ class TwitterBasicTokenizer(object):
       split_tokens.extend(self._run_split_on_punc(token))
 
     output_tokens = whitespace_tokenize(" ".join(split_tokens))
-
-    # if self.do_bpe:
-    #   split_tokens = []
-    #   for token in output_tokens:
-    #     for sub_token in self.wordpiece_tokenizer.tokenize(token):
-    #       split_tokens.append(sub_token)
-    #
-    #   return split_tokens
 
     if to_char:
       output_tokens = self.to_char(output_tokens)
